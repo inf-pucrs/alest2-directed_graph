@@ -1,19 +1,23 @@
 
 from collections import deque
 from dataclasses import astuple, dataclass, field
-from itertools import filterfalse
-from typing import Dict, List, Mapping, Set, Tuple, TypeVar, Union
+from functools import partial
+from itertools import filterfalse, starmap
+from typing import Deque, Dict, Generic, List, Mapping, Set, Tuple, TypeVar, Union
+
+from toolz import compose
+from toolz.dicttoolz import valmap
 
 
 Vertex = str
-Edge = Tuple[Vertex, Vertex]
-
 Number = Union[int, float]
+
 T = TypeVar("T", Vertex, str)
+EdgeAsTuple = Tuple[Vertex, Vertex, Number]
 
 
 @dataclass(order=True, frozen=True)
-class WeightedEdge:
+class WeightedEdge(Generic[T]):
     tail: T = field(hash=True, compare=False)
     head: T = field(hash=True, compare=False)
     weight: Number
@@ -36,11 +40,13 @@ class WeightedEdge:
             return not self == other
 
 
-@dataclass(order=True, frozen=True)
 class DirGraph:
-    def __init__(self, adjacency_dict: Dict[Vertex, Set[Edge]]):
+    def __init__(self, adjacency_dict: Mapping[Vertex, Set[EdgeAsTuple]]):
         super().__init__()
-        self.adjacency_dict = dict(adjacency_dict)
+        self.adjacencies = valmap(
+            compose(set, partial(starmap, WeightedEdge)),
+            adjacency_dict,
+        )
         self.marks: Dict[Vertex, bool] = {}
         self.in_use: Dict[Vertex, bool] = {}
 
@@ -54,48 +60,48 @@ class DirGraph:
         self.marks = {}
 
     def __len__(self) -> int:
-        return len(self.adjacency_dict)
-    
-    def get_edges(self) -> Set[Edge]:
+        return len(self.adjacencies)
+
+    def get_edges(self) -> Set[WeightedEdge]:
         edges = {
             edge
-            for node, edges in self.adjacency_dict.items()
+            for node, edges in self.adjacencies.items()
             for edge in edges
         }
         return edges
-    
+
     def get_neighbors(self, vertex: Vertex) -> Set[Vertex]:
-        neighbors = {head for tail, head in self.adjacency_dict[vertex]}
+        neighbors = {edge.head for edge in self.adjacencies[vertex]}
         return neighbors
 
     def get_nodes_in_use(self) -> List[Vertex]:
         return list(self.in_use.keys())
 
-    def add_edge(self, tail: Vertex, head: Vertex):
-        self.adjacency_dict[tail].add((tail, head))
+    def add_edge(self, tail: Vertex, head: Vertex, weight: Number):
+        self.adjacencies[tail].add(WeightedEdge(tail, head, Number))
 
-    def remove_edge(self, tail: Vertex, head: Vertex):
-        self.adjacency_dict[tail].remove((tail, head))
-    
+    def remove_edge(self, tail: Vertex, head: Vertex, weight: Number):
+        self.adjacencies[tail].remove(WeightedEdge(tail, head, Number))
+
     def __repr__(self):
-        return repr(self.adjacency_dict)
+        return repr(self.adjacencies)
 
     def get_all_degrees(self) -> Dict[Vertex, int]:
         """
         Get the number of edges that point to each node.
-        
+
         O(2V + E)
         """
         in_degrees_counter = {
-            vertex: 0 for vertex in self.adjacency_dict.keys()
+            vertex: 0 for vertex in self.adjacencies.keys()
         }
-        for out_edges in self.adjacency_dict.values():
-            for _, head in out_edges:
-                in_degrees_counter[head] += 1
+        for out_edges in self.adjacencies.values():
+            for edge in out_edges:
+                in_degrees_counter[edge.head] += 1
         return in_degrees_counter
 
     def breadth_first_walk(self, node: Vertex) -> None:
-        queue = deque()
+        queue: Deque[Vertex] = deque()
         queue.append(node)
         while queue:
             vertex = queue.popleft()
@@ -109,11 +115,12 @@ class DirGraph:
 
 
 if __name__ == "__main__":
+
     adj_dict = {
-        "a": {("a", "b"), ("a", "c")},
-        "b": {("b", "a")},
+        "a": {("a", "b", 5), ("a", "c", 4)},
+        "b": {("b", "a", 3)},
         "c": {},
-        "d": {("d", "a")},
+        "d": {("d", "a", 6)},
     }
     graph = DirGraph(adj_dict)
     print(graph)
