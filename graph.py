@@ -62,7 +62,8 @@ class DirGraph:
     def __len__(self) -> int:
         return len(self.adjacencies)
 
-    def get_edges(self) -> Set[WeightedEdge]:
+    @property()
+    def edges(self) -> Set[WeightedEdge]:
         edges = {
             edge
             for node, edges in self.adjacencies.items()
@@ -111,7 +112,8 @@ class DirGraph:
             queue.extend(unmarked_nodes)
 
     def get_minimum_spanning_tree_kruskal(self):
-        pass
+        sorted_edges = sorted(self.edges)
+        print(sorted_edges)
 
 
 if __name__ == "__main__":
@@ -124,7 +126,8 @@ if __name__ == "__main__":
     }
     graph = DirGraph(adj_dict)
     print(graph)
-    print(graph.get_edges())
+    print(graph.edges)
     print(graph.get_all_degrees())
     graph.breadth_first_walk("a")
     print(graph.marks)
+    print(graph.get_minimum_spanning_tree_kruskal())
