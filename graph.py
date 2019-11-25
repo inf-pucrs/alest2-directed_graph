@@ -1,9 +1,21 @@
 
+import heapq
 from collections import deque
 from dataclasses import astuple, dataclass, field
 from functools import partial
 from itertools import filterfalse, starmap
-from typing import Deque, Dict, Generic, List, Mapping, Set, Tuple, TypeVar, Union
+from typing import (
+    Deque,
+    Dict,
+    Generator,
+    Generic,
+    List,
+    Mapping,
+    Set,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
 from toolz import compose
 from toolz.dicttoolz import valmap
@@ -12,14 +24,15 @@ from toolz.dicttoolz import valmap
 Vertex = str
 Number = Union[int, float]
 
-T = TypeVar("T", Vertex, str)
+V = TypeVar("V", Vertex, str)
+E = TypeVar("E")
 EdgeAsTuple = Tuple[Vertex, Vertex, Number]
 
 
 @dataclass(order=True, frozen=True)
-class WeightedEdge(Generic[T]):
-    tail: T = field(hash=True, compare=False)
-    head: T = field(hash=True, compare=False)
+class WeightedEdge(Generic[V]):
+    tail: V = field(hash=True, compare=False)
+    head: V = field(hash=True, compare=False)
     weight: Number
 
     def __eq__(self, other):
@@ -40,11 +53,17 @@ class WeightedEdge(Generic[T]):
             return not self == other
 
 
-class DirGraph:
-    def __init__(self, adjacency_dict: Mapping[Vertex, Set[EdgeAsTuple]]):
+class DirGraph(Generic[V, E]):
+    def __init__(
+        self,
+        adjacency_dict: Mapping[Vertex, Set[EdgeAsTuple]],
+        edge_type = WeightedEdge,
+    ):
         super().__init__()
-        self.adjacencies = valmap(
-            compose(set, partial(starmap, WeightedEdge)),
+        # the following line is the functional equivalent of
+        # {k: {edge_type(x) for x in v} for k, v in adjacency_dict.items()}
+        self.adjacencies: Dict[V, Set[E]] = valmap(
+            compose(set, partial(starmap, edge_type)),
             adjacency_dict,
         )
         self.marks: Dict[Vertex, bool] = {}
@@ -62,14 +81,11 @@ class DirGraph:
     def __len__(self) -> int:
         return len(self.adjacencies)
 
-    @property()
-    def edges(self) -> Set[WeightedEdge]:
-        edges = {
-            edge
-            for node, edges in self.adjacencies.items()
-            for edge in edges
-        }
-        return edges
+    @property
+    def edges(self) -> Generator[E, None, None]:
+        for node, edges in self.adjacencies.items():
+            for edge in edges:
+                yield edge
 
     def get_neighbors(self, vertex: Vertex) -> Set[Vertex]:
         neighbors = {edge.head for edge in self.adjacencies[vertex]}
@@ -112,8 +128,20 @@ class DirGraph:
             queue.extend(unmarked_nodes)
 
     def get_minimum_spanning_tree_kruskal(self):
-        sorted_edges = sorted(self.edges)
-        print(sorted_edges)
+        edges_heap = list(self.edges)  # O(E)
+        heapq.heapify(edges_heap)  # O(E)
+        connected_nodes = set()
+        chosen_edges = set()
+        for edge in edges_heap:  # O(E)
+            if len(connected_nodes) == len(self):
+                break
+            if edge.tail in connected_nodes and edge.head in connected_nodes:
+                continue
+            chosen_edges.add(edge)
+            connected_nodes.update(edge.tail, edge.head)
+        return chosen_edges
+
+
 
 
 if __name__ == "__main__":
@@ -126,7 +154,7 @@ if __name__ == "__main__":
     }
     graph = DirGraph(adj_dict)
     print(graph)
-    print(graph.edges)
+    print(*graph.edges)
     print(graph.get_all_degrees())
     graph.breadth_first_walk("a")
     print(graph.marks)
